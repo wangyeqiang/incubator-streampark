@@ -44,7 +44,7 @@ springdoc:
   packages-to-scan: org.apache.streampark.console
 
 spring:
-  profiles.active: h2 #[h2,pgsql,mysql]
+  profiles.active: mysql #h2 #[h2,pgsql,mysql]
   application.name: StreamPark
   devtools.restart.enabled: false
   mvc.pathmatch.matching-strategy: ant_path_matcher
@@ -96,7 +96,7 @@ streampark:
   hadoop-user-name: hdfs
   # local workspace, used to store source code and build dir etc.
   workspace:
-    local: /opt/streampark_workspace
+    local: E:\\IdeaProjects\\streampark-workplace
     remote: hdfs:///streampark   # support hdfs:///streampark/ 、 /streampark 、hdfs://host:ip/streampark/
 
   # remote docker register namespace for streampark
@@ -147,3 +147,18 @@ ldap:
   user:
     identity-attribute: uid
     email-attribute: mail
+
+alert:
+  datasource:
+    username: root
+    password: Sjzxz@cxdbdb82077274
+    driverclassname: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://10.32.71.163:3306/streampark?useUnicode=true&characterEncoding=UTF-8&useJDBCCompliantTimezoneShift=true&useLegacyDatetimeCode=false&serverTimezone=GMT%2B8
+  field:
+    tp_id: flink_alert
+    tp_nm: flink监控报警
+    impo_lvl: 1
+    mon_lvl: ERROR
+    group_nm: sjzx
+    table_nm: sjjh.t_monitor
+

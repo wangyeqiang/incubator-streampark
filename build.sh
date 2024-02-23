@@ -166,7 +166,7 @@ build() {
   scalaArg=$1
   modeArg=$2
 
-  if [ ! -x "$PRG_DIR/mvnw" ]; then
+  if [ ! -x "$PRG_DIR/mvnw.cmd" ]; then
     # shellcheck disable=SC2006
     echo_r "permission denied: $PRG_DIR/mvnw, please check."
     exit 1
@@ -184,7 +184,7 @@ build() {
       echo_g "build info: package mode @ detached, $scala, now build starting..."
     fi
 
-    "$PRG_DIR"/mvnw $profile -DskipTests clean install
+    "$PRG_DIR"/mvnw.cmd $profile -DskipTests clean install
 
     if [ $? -eq 0 ]; then
       if [ $modeArg == 1 ]; then

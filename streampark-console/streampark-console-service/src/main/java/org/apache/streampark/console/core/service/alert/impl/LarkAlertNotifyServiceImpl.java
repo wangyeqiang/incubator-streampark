@@ -17,6 +17,7 @@
 
 package org.apache.streampark.console.core.service.alert.impl;
 
+import org.apache.streampark.console.base.config.AlertDataSourceConfig;
 import org.apache.streampark.console.base.exception.AlertException;
 import org.apache.streampark.console.base.util.FreemarkerUtils;
 import org.apache.streampark.console.core.bean.AlertConfigWithParams;
@@ -31,11 +32,13 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import freemarker.template.Template;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -51,58 +54,108 @@ import java.util.Map;
 @Service
 @Lazy
 public class LarkAlertNotifyServiceImpl implements AlertNotifyService {
-  private Template template;
-  private final RestTemplate alertRestTemplate;
-  private final ObjectMapper mapper;
 
-  @Value("${streampark.proxy.lark-url:https://open.feishu.cn}")
-  private String larkProxyUrl;
+    private Template template;
+    private final RestTemplate alertRestTemplate;
+    private final ObjectMapper mapper;
 
-  public LarkAlertNotifyServiceImpl(RestTemplate alertRestTemplate, ObjectMapper mapper) {
-    this.alertRestTemplate = alertRestTemplate;
-    this.mapper = mapper;
-  }
+    @Value("${alert.field.table_nm}")
+    private String table_nm;
 
-  @PostConstruct
-  public void loadTemplateFile() {
-    String template = "alert-lark.ftl";
-    this.template = FreemarkerUtils.loadTemplateFile(template);
-  }
+    @Value("${alert.field.tp_id}")
+    private String tp_id ;
+
+    @Value("${alert.field.tp_nm}")
+    private String tp_nm ;
+
+    @Value("${alert.field.impo_lvl}")
+    private int  impo_lvl;
+
+    @Value("${alert.field.mon_lvl}")
+    private String  mon_lvl;
+
+    @Value("${alert.field.group_nm}")
+    private String group_nm;
+
+
+
+    @Value("${streampark.proxy.lark-url:https://open.feishu.cn}")
+    private String larkProxyUrl;
+
+    public LarkAlertNotifyServiceImpl(RestTemplate alertRestTemplate, ObjectMapper mapper) {
+        this.alertRestTemplate = alertRestTemplate;
+        this.mapper = mapper;
+    }
+
+    @PostConstruct
+    public void loadTemplateFile() {
+        String template = "alert-lark.ftl";
+        this.template = FreemarkerUtils.loadTemplateFile(template);
+    }
+
+    @Autowired
+    private AlertDataSourceConfig alertDataSourceConfig;
+
+    private  JdbcTemplate alertJdbcTemplate;
+
+    @PostConstruct
+    public void init() {
+        log.info("alertJdbcTemplate is initing ...");
+        this.alertJdbcTemplate = alertDataSourceConfig.alertJdbcTemplate();
+        log.info("alertJdbcTemplate init successful");
+    }
+
 
   @Override
   public boolean doAlert(AlertConfigWithParams alertConfig, AlertTemplate alertTemplate)
       throws AlertException {
-    AlertLarkParams alertLarkParams = alertConfig.getLarkParams();
-    if (alertLarkParams.getIsAtAll()) {
-      alertTemplate.setAtAll(true);
-    }
-    try {
-      // format markdown
-      String markdown = FreemarkerUtils.format(template, alertTemplate);
-      Map<String, Object> cardMap =
-          mapper.readValue(markdown, new TypeReference<Map<String, Object>>() {});
-
-      Map<String, Object> body = new HashMap<>();
-      // get sign
-      if (alertLarkParams.getSecretEnable()) {
-        long timestamp = System.currentTimeMillis() / 1000;
-        String sign = getSign(alertLarkParams.getSecretToken(), timestamp);
-        body.put("timestamp", timestamp);
-        body.put("sign", sign);
+      AlertLarkParams alertLarkParams = alertConfig.getLarkParams();
+      if (alertLarkParams.getIsAtAll()) {
+          alertTemplate.setAtAll(true);
       }
-      body.put("msg_type", "interactive");
-      body.put("card", cardMap);
-      sendMessage(alertLarkParams, body);
-      return true;
-    } catch (AlertException alertException) {
-      throw alertException;
-    } catch (Exception e) {
-      throw new AlertException("Failed send lark alert", e);
-    }
+      try {
+          // format markdown
+          String markdown = FreemarkerUtils.format(template, alertTemplate);
+          Map<String, Object> cardMap =
+              mapper.readValue(markdown, new TypeReference<Map<String, Object>>() {
+              });
+
+          Map<String, Object> body = new HashMap<>();
+          // get sign
+          if (alertLarkParams.getSecretEnable()) {
+              long timestamp = System.currentTimeMillis() / 1000;
+              String sign = getSign(alertLarkParams.getSecretToken(), timestamp);
+              body.put("timestamp", timestamp);
+              body.put("sign", sign);
+          }
+          body.put("msg_type", "interactive");
+          body.put("card", cardMap);
+          body.put("template",alertTemplate);
+          sendMessage(alertLarkParams, body);
+          return true;
+      } catch (AlertException alertException) {
+          throw alertException;
+      } catch (Exception e) {
+          throw new AlertException("Failed send lark alert", e);
+      }
+
   }
 
+
   private void sendMessage(AlertLarkParams params, Map<String, Object> body) throws AlertException {
-    // get webhook url
+
+     log.error(body.get("template").toString());
+     AlertTemplate alertTemplate = (AlertTemplate) body.get("template");
+     String sql = "insert into " + this.table_nm + "(tp_id,tp_nm,impo_lvl,mon_lvl,mon_msg,remark,group_nm,task_nm) values(?,?,?,?,?,?,?,?)";
+     String mon_msg = body.get("template").toString();
+     String remark = "FLINK监控报警";
+     String task_nm = "FLINk任务-" + alertTemplate.getJobName();
+     log.info("完成FLINK报警推送至数据库");
+     alertJdbcTemplate.update(sql,tp_id,tp_nm,impo_lvl,mon_lvl,mon_msg,remark,group_nm,task_nm);
+     log.info("完成FLINK报警推送至数据库");
+
+    /*
+    // get webhook urlAz
     String url = getWebhook(params);
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
@@ -126,6 +179,8 @@ public class LarkAlertNotifyServiceImpl implements AlertNotifyService {
               "Failed to request Lark robot alert,\nurl:%s,\nerrorCode:%d,\nerrorMsg:%s",
               url, robotResponse.getCode(), robotResponse.getMsg()));
     }
+    */
+
   }
 
   /**
@@ -168,4 +223,6 @@ public class LarkAlertNotifyServiceImpl implements AlertNotifyService {
       throw new AlertException("Calculate the signature failed.", e);
     }
   }
+
+
 }

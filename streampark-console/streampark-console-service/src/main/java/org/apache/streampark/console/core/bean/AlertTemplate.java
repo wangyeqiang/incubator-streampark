@@ -104,4 +104,9 @@ public class AlertTemplate implements Serializable {
         String.format("StreamPark Alert: %s, checkPoint is Failed", template.getJobName()));
     return template;
   }
+
+
+
+
+
 }
